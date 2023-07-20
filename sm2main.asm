@@ -663,6 +663,8 @@ GameMode              = 1
 VictoryMode           = 2
 GameOverMode          = 3
 
+LifeTempStore         = $07f5
+
 ; imports from other files
 ;SUBROUTINES IN SM2DATA2 AND SM2DATA4
 .import UpsideDownPipe_High
@@ -1289,6 +1291,8 @@ EndCastleAward:
    ora GameTimerDisplay+1
    ora GameTimerDisplay+2
    bne ExEWA
+   lda NumberofLives      ;store number of lives into memory
+   sta LifeTempStore      ;for restoring in FadeToBlue phase
    lda #$30
    sta SelectTimer        ;set select timer (used for world 8 ending only)
    lda #$06
@@ -1307,9 +1311,12 @@ NextWorld: lda #$00
            lda WorldNumber
            clc
            adc #$01                  ;add one, but only up to world 9
-           cmp #World9
+           cmp #$09                  ;compare to world 10 instead of 9
            bcc NoPast9
-           lda #World9               ;make world 9 loop forever (or until game is over)
+           inc HardWorldFlag         ;go into world A, load world A-D
+           jsr DiskScreen
+           jsr LoadHardWorlds
+           lda #$00
 NoPast9:   sta WorldNumber           ;update the world number
            jsr LoadAreaPointer       ;get pointer for the next area
            inc FetchNewGameTimerFlag ;and get a new game timer
@@ -1619,14 +1626,12 @@ OutputInter:   jsr OtherInter
                lda WorldNumber              ;if on any world besides 9, do next task
                cmp #World9
                bne IncSubtask
-               inc DisableScreenFlag        ;disable screen output
+               inc ScreenRoutineTask        ;world 9 should be the same as other worlds
                rts
 
 GameOverInter: lda #$03                     ;output game over screen to buffer
                jsr WriteGameText
                lda WorldNumber
-               cmp #World9
-               beq IncSubtask
                jmp IncModeTask
 
 NoInter:       lda #$09                     ;skip ahead in screen routine list
@@ -2851,8 +2856,6 @@ RunGameOver:
        lda #$00
        sta DisableScreenFlag
        lda WorldNumber       ;if on world 9, branch on to end the game
-       cmp #World9
-       beq W9End
        jmp GameOverMenu      ;otherwise run game over menu
 W9End: lda ScreenTimer
        bne ExRGO
@@ -4792,14 +4795,13 @@ RdyNextA: lda StarFlagTaskControl
           inc Hidden1UpFlag         ;otherwise set hidden 1-up box control flag
 NextArea: inc AreaNumber            ;increment area number used for address loader
           lda WorldNumber
-          cmp #$08
+          cmp #World9
           bne NotW9                 ;if not at end of world 9-4, branch
           lda LevelNumber           ;otherwise reset level and area numbers properly
           cmp #$04
           bne NotW9
-          lda #$00
-          sta LevelNumber
-          sta AreaNumber
+          inc WorldNumber           ;make world number to be 9
+          jsr NextWorld             ;and let NextWorld routine to do everything left
 NotW9:    jsr LoadAreaPointer       ;get new level pointer
           inc FetchNewGameTimerFlag ;set flag to load new game timer
           jsr ChgAreaMode           ;do sub to set secondary mode, disable screen and sprite 0
@@ -6750,7 +6752,7 @@ ExVMove: rts                          ;leave!
 ;-------------------------------------------------------------------------------------
 
 ;some unused bytes
-         .byte $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+         .byte $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
 
 ;-------------------------------------------------------------------------------------
 
@@ -14305,10 +14307,11 @@ World58List:
 EndingList:
       .byte $10, $30, $0f, $ff
 WorldADList:
-      .byte $40, $ff
+;need to load SM2CHAR1 to change back princess tiles into door tiles
+      .byte $01, $40, $ff
 
 FileCount:
-      .byte $03, $01, $03, $01
+      .byte $03, $01, $03, $02
 
 LoadFiles:
       ldx FileListNumber      ;get address to file list
@@ -14697,7 +14700,7 @@ GameMenuRoutine:
               sta DiskIOTask
               sta HardWorldFlag
               lda GamesBeatenCount        ;check to see if player has beaten
-              cmp #$08                    ;the game at least 8 times
+              cmp #$00                    ;no longer need checking
               bcc StG                     ;if not, start the game as usual at world 1
               lda SavedJoypadBits
               and #A_Button               ;check if the player pressed A + start
@@ -14748,9 +14751,9 @@ StartGame:
               jsr PatchPlayerNamePal      ;patch data over based on selected player
               lda #$00
               sta WorldNumber
-              lda #$00
+              ;lda #$00                   ;remove unnecessary code
               sta LevelNumber
-              lda #$00
+              ;lda #$00
               sta AreaNumber
               ldx #$0b
               lda #$00

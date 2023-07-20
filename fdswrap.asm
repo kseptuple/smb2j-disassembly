@@ -12,7 +12,7 @@ CHR = 1
 VRAM = 2
 
 ;FWNES header
-;.byte "FDS",$1a,1,0,0,0,0,0,0,0,0,0,0,0
+.byte "FDS",$1a,1,0,0,0,0,0,0,0,0,0,0,0
 
 .byte DiskInfoBlock
 .byte "*NINTENDO-HVC*"
@@ -86,12 +86,12 @@ MainEnd:
 .byte FileHeaderBlock
 .byte $04,$20
 .byte "SM2DATA2"
-.word $c470
+.word $c474
 .word Data2End-Data2Start
 .byte PRG,FileDataBlock
 Data2Start:
 .scope FILE_SM2DATA2
-.org $C470
+.org $C474
 .include "sm2data2.asm"
 .reloc
 .endscope
@@ -114,12 +114,12 @@ Data3End:
 .byte FileHeaderBlock
 .byte $06,$40
 .byte "SM2DATA4"
-.word $c2b4
+.word $c2b8
 .word Data4End-Data4Start
 .byte PRG,FileDataBlock
 Data4Start:
 .scope FILE_SM2DATA4
-.org $C2B4
+.org $C2B8
 .include "sm2data4.asm"
 .reloc
 .endscope

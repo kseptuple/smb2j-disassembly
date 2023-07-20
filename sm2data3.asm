@@ -14,7 +14,7 @@ DisableScreenFlag     = $0774
 SelectTimer           = $0780
 ScreenTimer           = $07a0
 WorldEndTimer         = $07a1
-FantasyW9MsgFlag      = $07f5
+LifeTempStore         = $07f5
 
 IRQUpdateFlag        = $0722
 IRQAckFlag           = $077b
@@ -148,6 +148,17 @@ Sfx_ExtraLife          = %01000000
 Sfx_CoinGrab           = %00000001
 VictoryMusic           = %00000100
 
+A_Button              = %10000000
+B_Button              = %01000000
+Select_Button         = %00100000
+Start_Button          = %00010000
+Up_Dir                = %00001000
+Down_Dir              = %00000100
+Left_Dir              = %00000010
+Right_Dir             = %00000001
+
+SavedJoypadBits       = $06fc
+
 ; imports from other files
 .import MoveSpritesOffscreen
 .import FreqRegLookupTbl
@@ -215,25 +226,11 @@ VictoryMusic           = %00000100
 ;-------------------------------------------------------------------------------------
 
 PrintWorld9Msgs:
-       lda OperMode              ;if in game over mode, branch
-       cmp #GameOverMode         ;note this routine only runs after world 8 and replaces
-       beq W9GameOver            ;the routine DemoReset in memory
-       lda FantasyW9MsgFlag      ;if world 9 flag was set earlier, skip this part
-       bne NoFW9
-       lda #$1d                  ;otherwise set VRAM pointer to print
-       sta VRAM_Buffer_AddrCtrl  ;the hidden fantasy "9 world" message
-       lda #$10
-       sta ScreenTimer
-       inc FantasyW9MsgFlag      ;and set flag to keep it from getting printed again
 NoFW9: lda #$00
        sta DisableScreenFlag     ;turn screen back on, move on to next screen sub
        jmp NextScreenTask
 
 W9GameOver:
-    lda #$20
-    sta ScreenTimer
-    lda #$1e                  ;set VRAM pointer to print world 9 goodbye message
-    sta VRAM_Buffer_AddrCtrl
     jmp NextOperTask          ;move on to next task
 
 ScreenSubsForFinalRoom:
@@ -342,6 +339,8 @@ TwoBlankRows:
     .byte $00
 
 FadeToBlue:
+          lda LifeTempStore
+          sta NumberofLives    ;restore number of lives
           inc EndControlCntr   ;increment a counter
           lda BlueDelayFlag    ;if it's time to fade to blue, branch
           bne BlueUpdateTiming
@@ -389,9 +388,14 @@ ELL: lda TwoBlankRows,x
      rts
     
 RunMushroomRetainers:
+       lda SavedJoypadBits         ;check to see if the player pressed B button
+       and #B_Button
+       bne RMRFinish               ;skip cutscene
        jsr MushroomRetainersForW8  ;draw and flash the seven mushroom retainers
        lda AltMusicBuffer          ;if still playing victory music, branch to leave
        bne ExRMR
+RMRFinish:
+       jsr StopMusic               ;stop BGM
        lda HardWorldFlag           ;if on world D, branch elsewhere
        bne BackToNormal
        inc OperMode_Task           ;otherwise just move onto the last task
@@ -438,6 +442,8 @@ BackToNormal:
     lda CompletedWorlds      ;if completed all worlds without skipping over any
     cmp #$ff                 ;then branch elsewhere (note warping backwards may
     beq GoToWorld9           ;allow player to complete skipped worlds)
+    inc WorldNumber          ;code for 8-4 to A-1 when not completed every world
+    jmp GoToWorld9           ;remove these 2 lines to return to title screen
 EndTheGame:
     lda #$00
     sta CompletedWorlds      ;init completed worlds flag, go back to title screen mode
@@ -446,8 +452,6 @@ EndTheGame:
 GoToWorld9:
     lda #$00
     sta CompletedWorlds      ;init completed worlds flag
-    sta NumberofLives        ;give the player one life
-    sta FantasyW9MsgFlag
     jmp NextWorld            ;run world 9
 
 FlashMRSpriteDataOfs:
